@@ -1,0 +1,561 @@
+{% extends "base_app.html" %}
+
+{% block title %}Quản trị hệ thống{% endblock %}
+
+{% block crumbs %}
+  <span>HUST IT-E6</span><span class="sep">/</span><span class="is-current">Quản trị hệ thống</span>
+{% endblock %}
+
+{% block actions %}
+  {% if tab == 'users' %}
+  <button class="btn-primary vt-add" type="button" id="newUserBtn">
+    <span class="material-symbols-outlined icon-18">person_add</span><span>Tạo tài khoản</span>
+  </button>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="vault admin" id="admin"
+     data-user-create="{{ url_for('api_admin_user_create') }}"
+     data-user-item="{{ url_for('api_admin_user_update', user_id=0) }}"
+     data-exam-item="{{ url_for('api_admin_exam_update', exam_id=0) }}">
+
+  <!-- Đầu trang + thống kê -->
+  <div class="page-head">
+    <div class="page-head__left">
+      <div class="tag-row">
+        <span class="chip chip--plain c-accent-soft">// ADMIN_CONSOLE</span>
+        <span class="chip chip--plain">ACCESS: BAN HỌC TẬP IT-E6</span>
+      </div>
+      <div class="page-head__title">
+        <h1>Quản Trị Tài Khoản &amp; Kho Đề Thi</h1>
+        <div class="tag-row">
+          <span class="chip chip--accent">{{ 'QUẢN LÝ TÀI KHOẢN' if tab == 'users' else 'QUẢN LÝ ĐỀ THI' }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="vt-stats">
+      {% if tab == 'users' %}
+      <div class="vt-stat"><span class="vt-dot"></span>
+        <div><span class="vt-stat__label">TÀI KHOẢN</span><strong>{{ ustats.total }}</strong></div></div>
+      <div class="vt-stat vt-stat--mid"><span class="material-symbols-outlined icon-16 vt-c-tertiary">shield_person</span>
+        <div><span class="vt-stat__label">QUẢN TRỊ</span><strong class="vt-c-tertiary">{{ ustats.admins }}</strong></div></div>
+      <div class="vt-stat"><span class="vt-dot vt-dot--danger"></span>
+        <div><span class="vt-stat__label">ĐÃ KHÓA</span><strong class="vt-c-secondary">{{ ustats.locked }}</strong></div></div>
+      {% else %}
+      <div class="vt-stat"><span class="vt-dot"></span>
+        <div><span class="vt-stat__label">TỔNG ĐỀ</span><strong>{{ estats.total }}</strong></div></div>
+      <div class="vt-stat vt-stat--mid"><span class="material-symbols-outlined icon-16 vt-c-tertiary">hard_drive</span>
+        <div><span class="vt-stat__label">DUNG LƯỢNG</span><strong class="vt-c-tertiary">{{ estats.size|filesize }}</strong></div></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="alert alert--error" id="pageErr" role="alert" hidden></div>
+
+  <!-- Tab -->
+  <nav class="ad-tabs" aria-label="Khu vực quản trị">
+    <a class="ad-tab {{ 'is-active' if tab == 'users' }}"
+       href="{{ link(tab='users', q=None, role=None, subject=None, cohort=None, page=None) }}">
+      <span class="material-symbols-outlined icon-18">group</span><span>Tài khoản</span>
+    </a>
+    <a class="ad-tab {{ 'is-active' if tab == 'exams' }}"
+       href="{{ link(tab='exams', q=None, role=None, subject=None, cohort=None, page=None) }}">
+      <span class="material-symbols-outlined icon-18">inventory_2</span><span>Đề thi</span>
+    </a>
+  </nav>
+
+  <!-- Thanh tìm kiếm & lọc -->
+  <form class="vt-toolbar" method="get" action="{{ url_for('admin') }}">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div class="vt-search">
+      <span class="material-symbols-outlined icon-18 vt-search__icon">search</span>
+      <input id="adminSearch" name="q" type="text" value="{{ q }}" maxlength="100" autocomplete="off"
+             placeholder="{{ 'Tìm MSSV, họ tên, email...' if tab == 'users' else 'Tìm mã kho, tên đề, người đóng góp...' }}">
+      <span class="vt-search__keys"><kbd>Ctrl</kbd><kbd>K</kbd></span>
+    </div>
+    <div class="vt-filters">
+      <div class="vt-selects">
+        {% if tab == 'users' %}
+        <div class="vt-select">
+          <select name="role" data-autosubmit aria-label="Lọc theo vai trò">
+            <option value="">Mọi vai trò</option>
+            {% for key, label in role_labels.items() %}
+            <option value="{{ key }}" {{ 'selected' if role == key }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <span class="material-symbols-outlined icon-16 vt-select__icon">expand_more</span>
+        </div>
+        {% else %}
+        <div class="vt-select">
+          <select name="subject" data-autosubmit aria-label="Lọc theo môn">
+            <option value="">Tất cả môn</option>
+            {% for s in subjects %}
+            <option value="{{ s.id }}" {{ 'selected' if subject_id == s.id }}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+          <span class="material-symbols-outlined icon-16 vt-select__icon">expand_more</span>
+        </div>
+        <div class="vt-select">
+          <select name="cohort" data-autosubmit aria-label="Lọc theo khóa">
+            <option value="">Tất cả khóa</option>
+            {% for value, label in cohorts %}
+            <option value="{{ value }}" {{ 'selected' if cohort == value }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <span class="material-symbols-outlined icon-16 vt-select__icon">expand_more</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+
+  <!-- Bảng -->
+  {% if rows %}
+  <div class="ad-tablewrap">
+    {% if tab == 'users' %}
+    <table class="ad-table">
+      <thead><tr>
+        <th>MSSV</th><th>Tài khoản</th><th>Vai trò</th><th>Trạng thái</th>
+        <th>Đề đã đóng góp</th><th>Ngày tạo</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for u in rows %}
+        {% set me = (u.id == current_user.id) %}
+        <tr data-id="{{ u.id }}" data-mssv="{{ u.mssv or '' }}" data-email="{{ u.email }}"
+            data-name="{{ u.full_name or '' }}" data-role="{{ u.role }}" data-active="{{ u.is_active }}">
+          <td class="ad-mono">{{ u.mssv or '—' }}</td>
+          <td class="ad-name">
+            <strong>{{ u.full_name or '—' }}{% if me %} <span class="ad-me">BẠN</span>{% endif %}</strong>
+            <span class="ad-sub">{{ u.email }}</span>
+          </td>
+          <td><span class="vt-badge {{ 'is-published' if u.role == 'admin' else 'is-draft' }}">{{ role_labels[u.role]|upper }}</span></td>
+          <td><span class="vt-badge {{ 'is-draft' if u.is_active else 'is-pending' }}">{{ 'HOẠT ĐỘNG' if u.is_active else 'ĐÃ KHÓA' }}</span></td>
+          <td class="ad-mono">{{ u.n_exams }}</td>
+          <td class="ad-mono">{{ u.created_at[:10] }}</td>
+          <td class="ad-act">
+            <button class="vt-icon-btn" type="button" data-act="edit-user" title="Sửa / cấp quyền / đặt lại mật khẩu" aria-label="Sửa tài khoản">
+              <span class="material-symbols-outlined icon-18">edit</span></button>
+            <button class="vt-icon-btn" type="button" data-act="toggle-user" {{ 'disabled' if me }}
+                    title="{{ 'Khóa tài khoản' if u.is_active else 'Mở khóa tài khoản' }}" aria-label="Khóa hoặc mở khóa">
+              <span class="material-symbols-outlined icon-18">{{ 'lock' if u.is_active else 'lock_open' }}</span></button>
+            <button class="vt-icon-btn vt-icon-btn--danger" type="button" data-act="delete-user" {{ 'disabled' if me }}
+                    title="Xóa tài khoản" aria-label="Xóa tài khoản">
+              <span class="material-symbols-outlined icon-18">delete</span></button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <table class="ad-table">
+      <thead><tr>
+        <th>Mã kho</th><th>Đề thi</th><th>Người đóng góp</th><th>Dung lượng</th><th>Ngày tải</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for e in rows %}
+        <tr data-id="{{ e.id }}" data-vault="{{ e.vault_id }}" data-title="{{ e.title }}"
+            data-subject="{{ e.subject_id }}" data-source="{{ e.source_id }}" data-cohort="{{ e.cohort }}"
+            data-duration="{{ e.duration_min }}" data-numq="{{ e.num_questions }}" data-scale="{{ e.grading_scale }}"
+            data-nb="{{ e.nb_th }}" data-vd="{{ e.vd }}" data-vdc="{{ e.vdc }}">
+          <td class="ad-mono c-accent-soft">{{ e.vault_id }}</td>
+          <td class="ad-title">
+            <strong>{{ e.title }}</strong>
+            <span class="ad-sub">{{ e.subject_name }} &bull; {{ e.cohort }} &bull; {{ e.num_questions }} câu &bull; {{ e.duration_min }} phút</span>
+          </td>
+          <td>{{ e.uploader_name }}</td>
+          <td class="ad-mono">{{ e.size_bytes|filesize }}</td>
+          <td class="ad-mono">{{ e.created_at[:10] }}</td>
+          <td class="ad-act">
+            {% if e.ext != '.zip' %}
+            <a class="vt-icon-btn" href="{{ url_for('file_preview', file_id=e.file_id) }}" target="_blank" rel="noopener" title="Xem tệp" aria-label="Xem tệp">
+              <span class="material-symbols-outlined icon-18">visibility</span></a>
+            {% endif %}
+            <a class="vt-icon-btn" href="{{ url_for('file_download', file_id=e.file_id) }}" title="Tải xuống" aria-label="Tải xuống">
+              <span class="material-symbols-outlined icon-18">download</span></a>
+            <button class="vt-icon-btn" type="button" data-act="edit-exam" title="Sửa thông tin đề" aria-label="Sửa đề thi">
+              <span class="material-symbols-outlined icon-18">edit</span></button>
+            <button class="vt-icon-btn vt-icon-btn--danger" type="button" data-act="delete-exam" title="Xóa đề thi" aria-label="Xóa đề thi">
+              <span class="material-symbols-outlined icon-18">delete</span></button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% else %}
+  <section class="vt-empty">
+    <span class="material-symbols-outlined">{{ 'group_off' if tab == 'users' else 'inventory_2' }}</span>
+    <strong>Không có dữ liệu phù hợp</strong>
+    <p>Hãy thử đổi từ khóa hoặc bỏ bớt bộ lọc.</p>
+    <a class="btn-soft" href="{{ link(q=None, role=None, subject=None, cohort=None, page=None) }}">Xóa bộ lọc</a>
+  </section>
+  {% endif %}
+
+  <!-- Phân trang -->
+  <footer class="vt-foot">
+    <div>Hiển thị <b>{{ first }} - {{ last }}</b> trong tổng số <b>{{ total }}</b> {{ 'tài khoản' if tab == 'users' else 'đề thi' }}</div>
+    {% if pages > 1 %}
+    <nav class="vt-pager" aria-label="Phân trang">
+      {% if page > 1 %}
+        <a class="vt-page" href="{{ link(page=page-1) }}" title="Trang trước"><span class="material-symbols-outlined icon-16">chevron_left</span></a>
+      {% else %}
+        <span class="vt-page is-disabled"><span class="material-symbols-outlined icon-16">chevron_left</span></span>
+      {% endif %}
+      {% for n in pages_nav %}
+        {% if n is none %}<span class="vt-page vt-page--gap">...</span>
+        {% else %}<a class="vt-page {{ 'is-active' if n == page }}" href="{{ link(page=n) }}">{{ n }}</a>{% endif %}
+      {% endfor %}
+      {% if page < pages %}
+        <a class="vt-page" href="{{ link(page=page+1) }}" title="Trang sau"><span class="material-symbols-outlined icon-16">chevron_right</span></a>
+      {% else %}
+        <span class="vt-page is-disabled"><span class="material-symbols-outlined icon-16">chevron_right</span></span>
+      {% endif %}
+    </nav>
+    {% endif %}
+  </footer>
+
+  <!-- ===== Modal: tạo / sửa tài khoản ===== -->
+  <div class="ad-modal" id="userModal" hidden>
+    <form class="ad-dialog" id="userForm" novalidate autocomplete="off">
+      <div class="ad-dialog__head">
+        <span class="card__title"><span class="material-symbols-outlined icon-20 c-accent-soft">manage_accounts</span>
+          <span id="userModalTitle">Tạo tài khoản</span></span>
+        <button class="icon-btn" type="button" data-close aria-label="Đóng"><span class="material-symbols-outlined icon-18">close</span></button>
+      </div>
+      <div class="ad-dialog__body">
+        <div class="alert alert--error ad-formerr" role="alert" hidden></div>
+        <input type="hidden" id="uId">
+        <div class="field">
+          <label class="label" for="uName">Họ và tên</label>
+          <input class="input" id="uName" type="text" maxlength="100" placeholder="VD: Nguyễn Văn A">
+          <span class="field-error" data-error-for="full_name"></span>
+        </div>
+        <div class="ad-row2">
+          <div class="field">
+            <label class="label" for="uMssv">MSSV (8 chữ số)</label>
+            <input class="input input--mono" id="uMssv" type="text" inputmode="numeric" maxlength="8" placeholder="20235678">
+            <span class="field-error" data-error-for="mssv"></span>
+          </div>
+          <div class="field">
+            <label class="label" for="uRole">Vai trò / quyền</label>
+            <div class="select-wrap">
+              <select class="input" id="uRole">
+                {% for key, label in role_labels.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+              </select>
+              <span class="material-symbols-outlined icon-18 select-wrap__icon">expand_more</span>
+            </div>
+            <span class="field-error" data-error-for="role"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="uEmail">Email Bách Khoa</label>
+          <input class="input" id="uEmail" type="email" maxlength="120" placeholder="20235678@sis.hust.edu.vn">
+          <span class="field-error" data-error-for="email"></span>
+        </div>
+        <div class="field">
+          <label class="label label--split" for="uPass">
+            <span id="uPassLabel">Mật khẩu</span><span class="c-accent-soft">TỐI THIỂU 8 KÝ TỰ</span>
+          </label>
+          <div class="input-row">
+            <input class="input input--mono" id="uPass" type="text" maxlength="128" autocomplete="new-password">
+            <button class="btn-square" id="genPass" type="button" title="Sinh mật khẩu ngẫu nhiên" aria-label="Sinh mật khẩu">
+              <span class="material-symbols-outlined icon-18">autorenew</span>
+            </button>
+          </div>
+          <span class="field-error" data-error-for="password"></span>
+        </div>
+        <label class="ad-check"><input type="checkbox" id="uActive" checked><span>Tài khoản đang hoạt động (bỏ chọn để khóa)</span></label>
+      </div>
+      <div class="ad-dialog__foot">
+        <button class="btn-soft" type="button" data-close>Hủy</button>
+        <button class="btn-primary" type="submit" id="userSave"><span class="material-symbols-outlined icon-18">save</span><span>Lưu</span></button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ===== Modal: sửa đề thi ===== -->
+  <div class="ad-modal" id="examModal" hidden>
+    <form class="ad-dialog" id="examForm" novalidate autocomplete="off">
+      <div class="ad-dialog__head">
+        <span class="card__title"><span class="material-symbols-outlined icon-20 c-accent-soft">edit_document</span>
+          <span>Sửa thông tin đề thi</span></span>
+        <button class="icon-btn" type="button" data-close aria-label="Đóng"><span class="material-symbols-outlined icon-18">close</span></button>
+      </div>
+      <div class="ad-dialog__body">
+        <div class="alert alert--error ad-formerr" role="alert" hidden></div>
+        <input type="hidden" id="eId">
+        <div class="field">
+          <span class="label">Mã định danh (không đổi)</span>
+          <input class="input input--mono input--accent" id="eVault" type="text" readonly>
+        </div>
+        <div class="field">
+          <label class="label" for="eTitle">Tiêu đề đề thi</label>
+          <input class="input" id="eTitle" type="text" maxlength="200">
+          <span class="field-error" data-error-for="title"></span>
+        </div>
+        <div class="ad-row2">
+          <div class="field">
+            <label class="label" for="eSubject">Môn học</label>
+            <div class="select-wrap">
+              <select class="input" id="eSubject">{% for s in subjects %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select>
+              <span class="material-symbols-outlined icon-18 select-wrap__icon">expand_more</span>
+            </div>
+            <span class="field-error" data-error-for="subject_id"></span>
+          </div>
+          <div class="field">
+            <label class="label" for="eCohort">Khóa</label>
+            <div class="select-wrap">
+              <select class="input" id="eCohort">{% for value, label in cohorts %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+              <span class="material-symbols-outlined icon-18 select-wrap__icon">expand_more</span>
+            </div>
+            <span class="field-error" data-error-for="cohort"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="eSource">Nguồn đề thi</label>
+          <div class="select-wrap">
+            <select class="input" id="eSource">{% for s in sources %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}</select>
+            <span class="material-symbols-outlined icon-18 select-wrap__icon">expand_more</span>
+          </div>
+          <span class="field-error" data-error-for="source_id"></span>
+        </div>
+        <div class="ad-row3">
+          <div class="field">
+            <label class="label" for="eDuration">Thời lượng (phút)</label>
+            <input class="input input--mono input--center" id="eDuration" type="number" min="5" max="600" inputmode="numeric">
+            <span class="field-error" data-error-for="duration_min"></span>
+          </div>
+          <div class="field">
+            <label class="label" for="eNumQ">Số câu hỏi</label>
+            <input class="input input--mono input--center" id="eNumQ" type="number" min="1" max="500" inputmode="numeric">
+            <span class="field-error" data-error-for="num_questions"></span>
+          </div>
+          <div class="field">
+            <label class="label" for="eScale">Thang điểm</label>
+            <div class="select-wrap">
+              <select class="input input--mono" id="eScale">{% for value, label in scales %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+              <span class="material-symbols-outlined icon-18 select-wrap__icon">expand_more</span>
+            </div>
+            <span class="field-error" data-error-for="grading_scale"></span>
+          </div>
+        </div>
+        <div class="field">
+          <span class="label">Ma trận độ khó (không bắt buộc)</span>
+          <div class="ad-row3">
+            <input class="input input--mono input--center" id="eNb" type="number" min="0" max="500" placeholder="NB/TH" inputmode="numeric" aria-label="NB/TH">
+            <input class="input input--mono input--center" id="eVd" type="number" min="0" max="500" placeholder="VD" inputmode="numeric" aria-label="VD">
+            <input class="input input--mono input--center" id="eVdc" type="number" min="0" max="500" placeholder="VDC" inputmode="numeric" aria-label="VDC">
+          </div>
+          <span class="field-error" data-error-for="matrix"></span>
+        </div>
+      </div>
+      <div class="ad-dialog__foot">
+        <button class="btn-soft" type="button" data-close>Hủy</button>
+        <button class="btn-primary" type="submit" id="examSave"><span class="material-symbols-outlined icon-18">save</span><span>Lưu thay đổi</span></button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ===== Modal: xác nhận ===== -->
+  <div class="ad-modal" id="confirmModal" hidden>
+    <div class="ad-dialog ad-dialog--sm">
+      <div class="ad-dialog__head">
+        <span class="card__title"><span class="material-symbols-outlined icon-20" style="color:var(--vt-secondary)">warning</span>
+          <span id="confirmTitle">Xác nhận</span></span>
+      </div>
+      <div class="ad-dialog__body">
+        <div class="alert alert--error" id="confirmErr" role="alert" hidden></div>
+        <p class="ad-confirm" id="confirmMsg"></p>
+      </div>
+      <div class="ad-dialog__foot">
+        <button class="btn-soft" type="button" data-close>Hủy</button>
+        <button class="btn-primary ad-btn-danger" type="button" id="confirmOk">Xác nhận</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+
+  var root = document.getElementById("admin");
+  var csrf = document.querySelector('meta[name="csrf-token"]').content;
+  var URL = { userCreate: root.dataset.userCreate, userItem: root.dataset.userItem, examItem: root.dataset.examItem };
+  function $(id) { return document.getElementById(id); }
+  function itemUrl(base, id) { return base.replace(/0$/, String(id)); }
+
+  function api(method, url, body) {
+    var opt = { method: method, credentials: "same-origin",
+                headers: { "X-CSRF-Token": csrf, "Accept": "application/json" } };
+    if (body) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+    return fetch(url, opt).then(function (r) {
+      return r.text().then(function (t) {
+        var d = null; try { d = JSON.parse(t); } catch (e) {}
+        return { status: r.status, data: d };
+      });
+    }).catch(function () { return { status: 0, data: { ok: false, error: "Mất kết nối tới máy chủ. Vui lòng thử lại." } }; });
+  }
+
+  /* ---- Modal ---- */
+  function openM(m) {
+    m.hidden = false; document.body.style.overflow = "hidden";
+    var f = m.querySelector("input:not([type=hidden]):not([readonly]),select");
+    if (f) setTimeout(function () { f.focus(); }, 30);
+  }
+  function closeM(m) {
+    m.hidden = true;
+    if (!document.querySelector(".ad-modal:not([hidden])")) document.body.style.overflow = "";
+  }
+  document.addEventListener("click", function (e) {
+    var c = e.target.closest("[data-close]");
+    if (c) { closeM(c.closest(".ad-modal")); return; }
+    if (e.target.classList.contains("ad-modal")) closeM(e.target);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") Array.prototype.forEach.call(document.querySelectorAll(".ad-modal:not([hidden])"), closeM);
+  });
+
+  function clearErr(form) {
+    var a = form.querySelector(".ad-formerr"); a.hidden = true; a.textContent = "";
+    Array.prototype.forEach.call(form.querySelectorAll("[data-error-for]"), function (n) { n.textContent = ""; });
+  }
+  function applyErr(form, res) {
+    var d = res.data || {};
+    if (d.fields) Object.keys(d.fields).forEach(function (k) {
+      var h = form.querySelector('[data-error-for="' + k + '"]'); if (h) h.textContent = d.fields[k];
+    });
+    var a = form.querySelector(".ad-formerr");
+    a.textContent = d.error || ("Thao tác thất bại (mã " + res.status + ")."); a.hidden = false;
+  }
+  function busy(btn, on) { btn.disabled = on; btn.style.opacity = on ? ".6" : ""; }
+  function pageErr(msg) {
+    var a = $("pageErr"); a.textContent = msg; a.hidden = false;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /* ---- Xác nhận ---- */
+  var confirmFn = null;
+  function ask(title, msg, label, fn) {
+    $("confirmTitle").textContent = title;
+    $("confirmMsg").textContent = msg;
+    $("confirmOk").textContent = label;
+    $("confirmErr").hidden = true;
+    confirmFn = fn;
+    openM($("confirmModal"));
+  }
+  $("confirmOk").addEventListener("click", function () {
+    var btn = this; if (!confirmFn) return;
+    busy(btn, true);
+    confirmFn().then(function (res) {
+      if (res.data && res.data.ok) { location.reload(); return; }
+      busy(btn, false);
+      var e = $("confirmErr"); e.textContent = (res.data && res.data.error) || "Thao tác thất bại."; e.hidden = false;
+    });
+  });
+
+  /* ---- Tài khoản ---- */
+  var userForm = $("userForm");
+  function openUser(d) {
+    clearErr(userForm);
+    var edit = !!d;
+    $("userModalTitle").textContent = edit ? "Sửa tài khoản" : "Tạo tài khoản";
+    $("uPassLabel").textContent = edit ? "Mật khẩu mới (để trống = giữ nguyên)" : "Mật khẩu";
+    $("uId").value = edit ? d.id : "";
+    $("uName").value = edit ? d.name : "";
+    $("uMssv").value = edit ? d.mssv : "";
+    $("uEmail").value = edit ? d.email : "";
+    $("uRole").value = edit ? d.role : "student";
+    $("uActive").checked = edit ? d.active === "1" : true;
+    $("uPass").value = "";
+    openM($("userModal"));
+  }
+  if ($("newUserBtn")) $("newUserBtn").addEventListener("click", function () { openUser(null); });
+
+  $("genPass").addEventListener("click", function () {
+    var chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789", out = "";
+    var buf = new Uint32Array(12); (window.crypto || window.msCrypto).getRandomValues(buf);
+    for (var i = 0; i < buf.length; i++) out += chars[buf[i] % chars.length];
+    $("uPass").value = out;
+  });
+
+  userForm.addEventListener("submit", function (e) {
+    e.preventDefault(); clearErr(userForm);
+    var id = $("uId").value;
+    var body = { full_name: $("uName").value, mssv: $("uMssv").value, email: $("uEmail").value,
+                 role: $("uRole").value, is_active: $("uActive").checked };
+    var pw = $("uPass").value;
+    if (pw || !id) body.password = pw;
+    var btn = $("userSave"); busy(btn, true);
+    api(id ? "PATCH" : "POST", id ? itemUrl(URL.userItem, id) : URL.userCreate, body).then(function (res) {
+      if (res.data && res.data.ok) { location.reload(); return; }
+      busy(btn, false); applyErr(userForm, res);
+    });
+  });
+
+  /* ---- Đề thi ---- */
+  var examForm = $("examForm");
+  examForm.addEventListener("submit", function (e) {
+    e.preventDefault(); clearErr(examForm);
+    var body = { title: $("eTitle").value, subject_id: $("eSubject").value, source_id: $("eSource").value,
+                 cohort: $("eCohort").value, duration_min: $("eDuration").value, num_questions: $("eNumQ").value,
+                 grading_scale: $("eScale").value, nb_th: $("eNb").value, vd: $("eVd").value, vdc: $("eVdc").value };
+    var btn = $("examSave"); busy(btn, true);
+    api("PATCH", itemUrl(URL.examItem, $("eId").value), body).then(function (res) {
+      if (res.data && res.data.ok) { location.reload(); return; }
+      busy(btn, false); applyErr(examForm, res);
+    });
+  });
+
+  /* ---- Nút trong bảng ---- */
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
+    var tr = b.closest("tr"), d = tr.dataset;
+    switch (b.dataset.act) {
+      case "edit-user": openUser(d); break;
+      case "toggle-user":
+        if (d.active === "1") {
+          ask("Khóa tài khoản", "Khóa " + d.email + "? Người này sẽ bị đăng xuất và không đăng nhập lại được.", "Khóa",
+              function () { return api("PATCH", itemUrl(URL.userItem, d.id), { is_active: false }); });
+        } else {
+          api("PATCH", itemUrl(URL.userItem, d.id), { is_active: true }).then(function (res) {
+            if (res.data && res.data.ok) location.reload(); else pageErr((res.data && res.data.error) || "Thao tác thất bại.");
+          });
+        }
+        break;
+      case "delete-user":
+        ask("Xóa tài khoản", "Xóa vĩnh viễn tài khoản " + d.email + "? Không thể hoàn tác.", "Xóa",
+            function () { return api("DELETE", itemUrl(URL.userItem, d.id)); });
+        break;
+      case "edit-exam":
+        clearErr(examForm);
+        $("eId").value = d.id; $("eVault").value = d.vault; $("eTitle").value = d.title;
+        $("eSubject").value = d.subject; $("eSource").value = d.source; $("eCohort").value = d.cohort;
+        $("eDuration").value = d.duration; $("eNumQ").value = d.numq; $("eScale").value = d.scale;
+        $("eNb").value = d.nb === "0" ? "" : d.nb; $("eVd").value = d.vd === "0" ? "" : d.vd; $("eVdc").value = d.vdc === "0" ? "" : d.vdc;
+        openM($("examModal"));
+        break;
+      case "delete-exam":
+        ask("Xóa đề thi", "Xóa đề " + d.vault + " cùng tệp đính kèm? Không thể hoàn tác.", "Xóa",
+            function () { return api("DELETE", itemUrl(URL.examItem, d.id)); });
+        break;
+    }
+  });
+
+  /* ---- Tìm kiếm / lọc ---- */
+  var search = $("adminSearch");
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault(); if (search) { search.focus(); search.select(); }
+    }
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-autosubmit]"), function (sel) {
+    sel.addEventListener("change", function () { sel.form.submit(); });
+  });
+})();
+</script>
+{% endblock %}

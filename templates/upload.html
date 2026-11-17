@@ -1,0 +1,324 @@
+{% extends "base_app.html" %}
+
+{% block title %}Đóng góp đề thi{% endblock %}
+
+{% block crumbs %}
+  <span>HUST IT-E6</span><span class="sep">/</span><span class="is-current">Đóng góp đề thi</span>
+{% endblock %}
+
+{% block content %}
+<div id="contribute"
+     data-upload-url="{{ url_for('api_upload') }}"
+     data-delete-url="{{ url_for('api_upload_delete', file_id=0) }}"
+     data-vault-url="{{ url_for('api_vault_id') }}"
+     data-create-url="{{ url_for('api_create_exam') }}"
+     data-home-url="{{ url_for('dashboard') }}"
+     data-max-bytes="{{ max_bytes }}">
+
+  <!-- Đầu trang -->
+  <div class="page-head">
+    <div class="page-head__left">
+      <div class="crumbs crumbs--small">
+        <span>HUST IT-E6</span><span class="sep">/</span><span>KHO ĐỀ ÔN TẬP</span><span class="sep">/</span><span class="is-current">Đóng góp đề thi</span>
+      </div>
+      <div class="page-head__title">
+        <h1>Tải Lên &amp; Đóng Góp Đề Thi Lớp IT-E6</h1>
+        <div class="tag-row">
+          <span class="chip chip--plain c-accent-soft">// WORKFLOW: INGESTION_PIPELINE</span>
+          <span class="chip chip--accent">CHẾ ĐỘ NỘI BỘ IT-E6 (HUST)</span>
+        </div>
+      </div>
+    </div>
+    <div class="telemetry">
+      <div class="telemetry__text">
+        <span class="label">Ổ đĩa lưu trữ đề thi</span>
+        <strong>{{ storage.free_h }} trống &bull; {{ storage.free_pct }}% Free</strong>
+      </div>
+      <div class="telemetry__bar"><div style="height: {{ storage.free_pct }}%"></div></div>
+    </div>
+  </div>
+
+  <form id="examForm" novalidate autocomplete="off">
+    <div class="grid-2">
+
+      <!-- ================= CỘT TRÁI ================= -->
+      <div class="col">
+
+        <!-- Khu vực nạp tệp -->
+        <section class="card">
+          <div class="card__head">
+            <div class="card__title">
+              <span class="material-symbols-outlined icon-20 c-accent-soft">cloud_upload</span>
+              <span>Khu vực nạp tệp gốc // INGESTION_BAY</span>
+            </div>
+            <span class="bay-state" id="bayState" data-state="idle">SẴN SÀNG</span>
+          </div>
+
+          <div class="dropzone" id="dropzone" role="button" tabindex="0"
+               aria-label="Chọn hoặc kéo thả tệp đề thi vào đây">
+            <div class="dropzone__icon"><span class="material-symbols-outlined icon-24" style="font-size:32px">upload_file</span></div>
+            <div>
+              <p class="dropzone__title">Kéo thả tệp PDF hoặc ảnh chụp đề thi môn học vào đây</p>
+              <p class="dropzone__sub">hoặc <span class="link">duyệt qua tệp trên thiết bị</span></p>
+            </div>
+            <div class="tag-row" style="justify-content:center">
+              <span class="chip chip--accent">.PDF (Đề thi scan / LaTeX)</span>
+              <span class="chip chip--accent">.JPG / .PNG (Ảnh chụp đề thi)</span>
+              <span class="chip">.ZIP (Gói đề thi &amp; tài liệu ôn tập)</span>
+            </div>
+            <p class="dropzone__limit">Giới hạn dung lượng tối đa {{ max_mb }}MB mỗi phiên tải.</p>
+          </div>
+
+          <div class="progress" id="progressWrap" hidden>
+            <div class="progress__meta"><span id="progressName">Đang tải lên...</span><span id="progressPct">0%</span></div>
+            <div class="progress__track"><div class="progress__bar" id="progressBar"></div></div>
+          </div>
+
+          <div class="alert alert--error" id="dzError" role="alert" hidden></div>
+
+          <div class="quick-row">
+            <button class="btn-soft" id="pickBtn" type="button">
+              <span class="material-symbols-outlined icon-18 c-accent-soft">folder_open</span>
+              <span>Chọn tệp từ thiết bị</span>
+            </button>
+            <button class="btn-soft" id="cameraBtn" type="button">
+              <span class="material-symbols-outlined icon-18" style="color:var(--warn)">photo_camera</span>
+              <span>Chụp ảnh đề thi</span>
+            </button>
+          </div>
+
+          <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.zip" hidden>
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+        </section>
+
+        <!-- Thông tin tệp đã nạp -->
+        <section class="card" id="fileCard" hidden>
+          <div class="card__head">
+            <span class="card__title">// TỆP ĐỀ THI ĐÃ NẠP: THÔNG TIN TÀI LIỆU</span>
+            <span class="live-label"><span class="pulse-dot"></span>TẢI LÊN THÀNH CÔNG (READY)</span>
+          </div>
+          <div class="file-box">
+            <div class="file-row">
+              <div class="file-row__left">
+                <div class="file-icon"><span class="material-symbols-outlined icon-24" id="fileIcon">picture_as_pdf</span></div>
+                <div class="file-row__text">
+                  <strong id="fileName"></strong>
+                  <span id="fileMeta"></span>
+                </div>
+              </div>
+              <div class="file-row__actions">
+                <button class="icon-btn" id="replaceBtn" type="button" title="Thay thế tệp" aria-label="Thay thế tệp">
+                  <span class="material-symbols-outlined icon-18">refresh</span>
+                </button>
+                <button class="icon-btn icon-btn--danger" id="removeBtn" type="button" title="Xóa tệp hiện tại" aria-label="Xóa tệp hiện tại">
+                  <span class="material-symbols-outlined icon-18">close</span>
+                </button>
+              </div>
+            </div>
+            <div class="stat-grid">
+              <div class="stat"><span class="stat__label" id="stat1Label"></span><strong id="stat1Value"></strong></div>
+              <div class="stat"><span class="stat__label" id="stat2Label"></span><strong id="stat2Value"></strong></div>
+              <div class="stat"><span class="stat__label">MÃ BĂM SHA-256</span><strong id="stat3Value" class="c-warn"></strong></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Xem trước -->
+        <section class="card" id="previewCard" hidden>
+          <div class="card__head">
+            <div class="card__title">
+              <span class="material-symbols-outlined icon-18 c-accent-soft">photo_library</span>
+              <span id="previewTitle">XEM TRƯỚC TÀI LIỆU</span>
+            </div>
+            <a class="btn-chip" id="openFullBtn" href="#" target="_blank" rel="noopener">
+              <span class="material-symbols-outlined icon-16">open_in_new</span><span>Mở toàn bộ</span>
+            </a>
+          </div>
+          <div class="thumb-grid" id="thumbGrid"></div>
+          <ul class="zip-list" id="zipList" hidden></ul>
+        </section>
+      </div>
+
+      <!-- ================= CỘT PHẢI ================= -->
+      <div class="col">
+        <section class="card">
+          <div class="card__head">
+            <div class="card__title">
+              <span class="material-symbols-outlined icon-20 c-accent-soft">tune</span>
+              <span>Siêu dữ liệu &amp; gắn thẻ môn lớp IT-E6</span>
+            </div>
+            <span class="chip chip--plain c-accent-soft">{{ 'ADMIN' if current_user.is_admin else 'SINH VIÊN' }}</span>
+          </div>
+
+          <div class="alert alert--error" id="formError" role="alert" hidden></div>
+
+          <!-- Mã kho -->
+          <div class="field">
+            <label class="label label--split" for="vaultId">
+              <span>Mã định danh đề thi (VAULT_ID)</span>
+              <span class="c-accent-soft">TỰ ĐỘNG SINH MÃ</span>
+            </label>
+            <div class="input-row">
+              <input class="input input--mono input--accent" id="vaultId" name="vault_id" type="text" readonly value="{{ vault_id }}">
+              <button class="btn-square" id="regenBtn" type="button" title="Tạo mã mới" aria-label="Tạo mã mới">
+                <span class="material-symbols-outlined icon-18" id="regenIcon">autorenew</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tiêu đề -->
+          <div class="field">
+            <label class="label" for="title">Tiêu đề đề thi chính thức</label>
+            <input class="input" id="title" name="title" type="text" maxlength="200"
+                   placeholder="VD: Đề thi cuối kỳ Giải tích 1 - K68 IT-E6 (kèm lời giải)">
+            <span class="field-error" data-error-for="title"></span>
+          </div>
+
+          <!-- Môn học -->
+          <div class="field">
+            <span class="label">Môn học khảo thí</span>
+            <div class="choices">
+              {% for s in subjects %}
+              <label class="choice">
+                <input type="radio" name="subject_id" value="{{ s.id }}" {{ 'checked' if loop.first }}>
+                <span>{{ s.name }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <span class="field-error" data-error-for="subject_id"></span>
+          </div>
+
+          <!-- Khóa -->
+          <div class="field">
+            <span class="label">Khóa / Năm học áp dụng</span>
+            <div class="choices choices--3">
+              {% for value, label in cohorts %}
+              <label class="choice">
+                <input type="radio" name="cohort" value="{{ value }}" {{ 'checked' if loop.first }}>
+                <span>{{ label }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            <span class="field-error" data-error-for="cohort"></span>
+          </div>
+
+          <!-- Nguồn -->
+          <div class="field">
+            <label class="label" for="sourceId">Nguồn đề thi / Giảng viên</label>
+            <div class="select-wrap">
+              <select class="input" id="sourceId" name="source_id">
+                {% for s in sources %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+              </select>
+              <span class="material-symbols-outlined icon-18 select-wrap__icon">expand_more</span>
+            </div>
+            <span class="field-error" data-error-for="source_id"></span>
+          </div>
+
+          <!-- Cấu trúc đề -->
+          <div class="trio">
+            <div class="field">
+              <label class="label" for="duration">Thời lượng (phút)</label>
+              <input class="input input--mono input--center" id="duration" name="duration_min" type="number" min="5" max="600" value="90" inputmode="numeric">
+              <span class="field-error" data-error-for="duration_min"></span>
+            </div>
+            <div class="field">
+              <label class="label" for="numQ">Số câu hỏi</label>
+              <input class="input input--mono input--center" id="numQ" name="num_questions" type="number" min="1" max="500" placeholder="VD: 25" inputmode="numeric">
+              <span class="field-error" data-error-for="num_questions"></span>
+            </div>
+            <div class="field">
+              <label class="label" for="scale">Thang điểm</label>
+              <div class="select-wrap">
+                <select class="input input--mono" id="scale" name="grading_scale">
+                  {% for value, label in scales %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </select>
+                <span class="material-symbols-outlined icon-18 select-wrap__icon">expand_more</span>
+              </div>
+              <span class="field-error" data-error-for="grading_scale"></span>
+            </div>
+          </div>
+
+          <!-- Ma trận độ khó -->
+          <div class="matrix">
+            <div class="matrix__head">
+              <span>MA TRẬN ĐỘ KHÓ (BLOOM TAXONOMY) - KHÔNG BẮT BUỘC</span>
+              <strong id="matrixTotal">CHƯA NHẬP</strong>
+            </div>
+            <div class="matrix__bar">
+              <div id="barNb" style="background:var(--warn);width:0"></div>
+              <div id="barVd" style="background:var(--accent);width:0"></div>
+              <div id="barVdc" style="background:var(--danger);width:0"></div>
+            </div>
+            <div class="matrix__inputs">
+              <label><span><i style="background:var(--warn)"></i>NB/TH</span>
+                <input class="input input--mono input--center" id="nbTh" name="nb_th" type="number" min="0" max="500" placeholder="0" inputmode="numeric"></label>
+              <label><span><i style="background:var(--accent)"></i>VD</span>
+                <input class="input input--mono input--center" id="vd" name="vd" type="number" min="0" max="500" placeholder="0" inputmode="numeric"></label>
+              <label><span><i style="background:var(--danger)"></i>VDC</span>
+                <input class="input input--mono input--center" id="vdc" name="vdc" type="number" min="0" max="500" placeholder="0" inputmode="numeric"></label>
+            </div>
+            <span class="field-error" id="matrixNote" data-error-for="matrix"></span>
+          </div>
+
+          <!-- Trạng thái
+          <div class="field">
+            <span class="label">Khởi tạo trạng thái xét duyệt</span>
+            <div class="choices-box">
+              <label class="choice-box">
+                <input type="radio" name="status" value="draft">
+                <span>Lưu bản nháp</span>
+              </label>
+              <label class="choice-box">
+                <input type="radio" name="status" value="pending" checked>
+                <span>Gửi Ban Học tập IT-E6 duyệt</span>
+              </label>
+              <label class="choice-box {{ '' if current_user.is_admin else 'is-disabled' }}"
+                     {% if not current_user.is_admin %}title="Chỉ Ban học tập (admin) được công khai trực tiếp"{% endif %}>
+                <input type="radio" name="status" value="published" {{ '' if current_user.is_admin else 'disabled' }}>
+                <span>Công khai kho đề lớp</span>
+              </label>
+            </div>
+            <span class="field-error" data-error-for="status"></span>
+          </div> -->
+
+          <!-- Người đóng góp -->
+          <div class="stamp">
+            <div class="side-user">
+              <div class="logo-box"><span class="material-symbols-outlined icon-18">school</span></div>
+              <div class="side-user__text">
+                <strong>Người đóng góp: {{ current_user.display_name }}</strong>
+                <span>{{ current_user.email }}{% if current_user.mssv %} &bull; MSSV {{ current_user.mssv }}{% endif %}</span>
+              </div>
+            </div>
+            <span class="chip chip--plain c-accent-soft">ĐÃ ĐĂNG NHẬP</span>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Thanh thao tác cố định -->
+    <div class="dock">
+      <div class="dock__left">
+        <a class="dock__cancel" id="cancelLink" href="{{ url_for('dashboard') }}">
+          <span class="material-symbols-outlined icon-18">arrow_back</span><span>HỦY BỎ / VỀ TRANG CHỦ</span>
+        </a>
+        <span class="dock__sep"></span>
+        <span class="dock__hint" id="dockHint">Chưa có tệp nào được nạp.</span>
+      </div>
+      <div class="dock__right">
+        <a class="btn-soft btn-soft--lg is-disabled" id="previewBtn" href="#" target="_blank" rel="noopener" aria-disabled="true">
+          <span class="material-symbols-outlined icon-18">visibility</span><span>XEM TRƯỚC TÀI LIỆU</span>
+        </a>
+        <button class="btn-primary btn-primary--dock" id="saveBtn" type="submit">
+          <span class="material-symbols-outlined icon-20">save</span>
+          <span id="saveLabel">HOÀN TẤT &amp; ĐƯA VÀO KHO LỚP IT-E6 (CTRL + S)</span>
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+{% endblock %}

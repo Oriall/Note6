@@ -1,0 +1,203 @@
+{% extends "base_app.html" %}
+
+{% block title %}Kho đề thi{% endblock %}
+
+{% block crumbs %}
+  <span>HUST IT-E6</span><span class="sep">/</span><span class="is-current">Kho đề thi</span>
+{% endblock %}
+
+{% block actions %}
+  <a class="btn-primary vt-add" href="{{ url_for('contribute') }}">
+    <span class="material-symbols-outlined icon-18">add</span><span>Thêm đề mới</span>
+  </a>
+{% endblock %}
+
+{% block content %}
+{% set badge = {'published': 'is-published', 'pending': 'is-pending', 'draft': 'is-draft'} %}
+<div class="vault">
+
+  <!-- Đầu trang + thống kê nhanh -->
+  <div class="page-head">
+    <div class="page-head__left">
+      <div class="tag-row">
+        <span class="chip chip--plain c-accent-soft">// HUST_ARCHIVE_SYSTEM</span>
+        <span class="chip chip--plain">INDEX: IT_E6_EXAM_VAULT</span>
+      </div>
+      <div class="page-head__title">
+        <h1>Kho Đề &amp; Tài Liệu Ôn Thi Lớp IT-E6</h1>
+        <div class="tag-row">
+          <span class="chip chip--accent">{{ '{:,}'.format(stats.total) }} TẬP TÀI LIỆU &amp; ĐỀ THI</span>
+        </div>
+      </div>
+    </div>
+    <div class="vt-stats">
+      <div class="vt-stat">
+        <span class="vt-dot"></span>
+        <div><span class="vt-stat__label">TỔNG ĐỀ</span><strong>{{ '{:,}'.format(stats.total) }}</strong></div>
+      </div>
+      <div class="vt-stat vt-stat--mid">
+        <span class="material-symbols-outlined icon-16 vt-c-tertiary">trending_up</span>
+        <div><span class="vt-stat__label">MỚI TUẦN NÀY</span><strong class="vt-c-tertiary">+{{ stats.new_week }}</strong></div>
+      </div>
+      <div class="vt-stat">
+        <span class="vt-dot vt-dot--danger pulse"></span>
+        <div><span class="vt-stat__label">CHỜ DUYỆT</span><strong class="vt-c-secondary">{{ stats.pending }}</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Thanh tìm kiếm & bộ lọc -->
+  <form class="vt-toolbar" id="filterForm" method="get" action="{{ url_for('dashboard') }}">
+    {% if subject_id %}<input type="hidden" name="subject" value="{{ subject_id }}">{% endif %}
+
+    <div class="vt-search">
+      <span class="material-symbols-outlined icon-18 vt-search__icon">search</span>
+      <input id="examSearchInput" name="q" type="text" value="{{ q }}" maxlength="100"
+             placeholder="Tìm mã kho, tên đề thi, môn học, nguồn đề..." autocomplete="off">
+      <span class="vt-search__keys"><kbd>Ctrl</kbd><kbd>K</kbd></span>
+    </div>
+
+    <div class="vt-filters">
+      <div class="vt-pills">
+        <a class="vt-pill {{ 'is-active' if not subject_id }}" href="{{ link(subject=None) }}">
+          <span>Tất cả</span><span class="vt-pill__n">{{ stats.total }}</span>
+        </a>
+        {% for s in subjects %}
+        <a class="vt-pill {{ 'is-active' if subject_id == s.id }}" href="{{ link(subject=s.id) }}">
+          <span>{{ s.name }}</span><span class="vt-pill__n">{{ s.n }}</span>
+        </a>
+        {% endfor %}
+      </div>
+
+      <div class="vt-selects">
+        <div class="vt-select">
+          <select name="cohort" data-autosubmit aria-label="Lọc theo khóa">
+            <option value="">Tất cả khóa</option>
+            {% for value, label in cohorts %}
+            <option value="{{ value }}" {{ 'selected' if cohort == value }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <span class="material-symbols-outlined icon-16 vt-select__icon">expand_more</span>
+        </div>
+        <div class="vt-select">
+          <select name="status" data-autosubmit aria-label="Lọc theo trạng thái">
+            <option value="">Mọi trạng thái</option>
+            {% for key, label in status_labels.items() %}
+            <option value="{{ key }}" {{ 'selected' if status == key }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <span class="material-symbols-outlined icon-16 vt-select__icon">expand_more</span>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <!-- Lưới đề thi -->
+  {% if exams %}
+  <section class="vt-grid">
+    {% for e in exams %}
+    <div class="vt-card" role="link" tabindex="0"
+         data-href="{{ url_for('file_download' if e.ext == '.zip' else 'file_preview', file_id=e.file_id) }}"
+         data-zip="{{ 1 if e.ext == '.zip' else 0 }}">
+      <div class="vt-card__body">
+        <div class="vt-card__top">
+          <span class="vt-card__id">{{ e.vault_id }}</span>
+          <span class="vt-badge {{ badge[e.status] }}">{{ status_labels[e.status]|upper }}</span>
+        </div>
+        <h2 class="vt-card__title">{{ e.title }}</h2>
+        <p class="vt-card__sub">{{ e.subject_name }} &bull; {{ e.cohort }} &bull; {{ e.source_name }}</p>
+      </div>
+      <div class="vt-card__foot">
+        <div class="vt-card__meta">
+          <span><span class="material-symbols-outlined icon-16">format_list_bulleted</span>{{ e.num_questions }} câu</span>
+          <span><span class="material-symbols-outlined icon-16">schedule</span>{{ e.duration_min }} phút</span>
+        </div>
+        <div class="vt-card__actions">
+          <a class="vt-icon-btn" href="{{ url_for('file_download', file_id=e.file_id) }}"
+             title="Tải tệp xuống" aria-label="Tải tệp xuống">
+            <span class="material-symbols-outlined icon-18">download</span>
+          </a>
+          <span class="vt-go"><span class="material-symbols-outlined icon-16">arrow_forward</span></span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% else %}
+  <section class="vt-empty">
+    <span class="material-symbols-outlined">inventory_2</span>
+    <strong>{{ 'Không tìm thấy đề thi phù hợp' if has_filter else 'Kho đề đang trống' }}</strong>
+    <p>{{ 'Hãy thử đổi từ khóa hoặc bỏ bớt bộ lọc.' if has_filter else 'Hãy là người đầu tiên đóng góp đề thi cho lớp IT-E6.' }}</p>
+    {% if has_filter %}
+      <a class="btn-soft" href="{{ url_for('dashboard') }}">Xóa bộ lọc</a>
+    {% else %}
+      <a class="btn-primary vt-add" href="{{ url_for('contribute') }}">
+        <span class="material-symbols-outlined icon-18">add</span><span>Thêm đề mới</span>
+      </a>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <!-- Phân trang -->
+  <footer class="vt-foot">
+    <div>Hiển thị <b>{{ first }} - {{ last }}</b> trong tổng số <b>{{ '{:,}'.format(total) }}</b> tài liệu &amp; đề thi</div>
+    {% if pages > 1 %}
+    <nav class="vt-pager" aria-label="Phân trang">
+      {% if page > 1 %}
+        <a class="vt-page" href="{{ link(page=page-1) }}" title="Trang trước"><span class="material-symbols-outlined icon-16">chevron_left</span></a>
+      {% else %}
+        <span class="vt-page is-disabled"><span class="material-symbols-outlined icon-16">chevron_left</span></span>
+      {% endif %}
+      {% for n in pages_nav %}
+        {% if n is none %}<span class="vt-page vt-page--gap">...</span>
+        {% else %}<a class="vt-page {{ 'is-active' if n == page }}" href="{{ link(page=n) }}">{{ n }}</a>{% endif %}
+      {% endfor %}
+      {% if page < pages %}
+        <a class="vt-page" href="{{ link(page=page+1) }}" title="Trang sau"><span class="material-symbols-outlined icon-16">chevron_right</span></a>
+      {% else %}
+        <span class="vt-page is-disabled"><span class="material-symbols-outlined icon-16">chevron_right</span></span>
+      {% endif %}
+    </nav>
+    {% endif %}
+  </footer>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+
+  var search = document.getElementById("examSearchInput");
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      if (search) { search.focus(); search.select(); }
+    }
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-autosubmit]"), function (sel) {
+    sel.addEventListener("change", function () { sel.form.submit(); });
+  });
+
+  function openCard(card) {
+    var href = card.dataset.href;
+    if (!href) return;
+    if (card.dataset.zip === "1") window.location.href = href;
+    else window.open(href, "_blank", "noopener");
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".vt-card"), function (card) {
+    card.addEventListener("click", function (e) {
+      if (e.target.closest("a, button")) return;
+      openCard(card);
+    });
+    card.addEventListener("keydown", function (e) {
+      if (e.target === card && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        openCard(card);
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

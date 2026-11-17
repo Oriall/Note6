@@ -29,6 +29,8 @@ Cau truc thu muc:
         |-- css/app.css
         `-- js/{login.js, app.js, upload.js}
 """
+from dotenv import load_dotenv
+
 from functools import wraps
 import hashlib
 import hmac
@@ -52,7 +54,7 @@ from flask import (Flask, Response, abort, flash, g, jsonify, redirect, render_t
 from flask_login import (LoginManager, UserMixin, current_user, login_required,
                          login_user, logout_user)
 from werkzeug.security import check_password_hash, generate_password_hash
-
+load_dotenv()
 import drive_storage
 
 # ----------------------------------------------------------------------------
@@ -61,9 +63,7 @@ import drive_storage
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE = str(BASE_DIR / "database.db")
 UPLOAD_DIR = BASE_DIR / "uploads"          # chi con dung cho tep cu (chua chuyen len Drive) + thumbnail
-THUMB_DIR = UPLOAD_DIR / "thumbs"
 UPLOAD_DIR.mkdir(exist_ok=True)
-THUMB_DIR.mkdir(exist_ok=True)
 # Thu muc tam: tep dang xu ly truoc khi day len Drive (luon duoc xoa sau do)
 STAGING_DIR = Path(tempfile.gettempdir()) / "ite6_staging"
 STAGING_DIR.mkdir(exist_ok=True)
@@ -251,8 +251,6 @@ def remove_file_assets(file_id, stored_name, drive_file_id=None):
             app.logger.exception("Khong xoa duoc tep tren Drive %s", drive_file_id)
     try:
         (UPLOAD_DIR / stored_name).unlink(missing_ok=True)
-        for t in THUMB_DIR.glob(f"{file_id}_*.png"):
-            t.unlink(missing_ok=True)
     except OSError:
         app.logger.exception("Khong xoa duoc tep %s", stored_name)
 
@@ -365,7 +363,7 @@ def verify_csrf():
 @app.after_request
 def security_headers(resp):
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
     resp.headers.setdefault("Referrer-Policy", "same-origin")
     return resp
 
@@ -691,10 +689,6 @@ def file_kind(ext):
 
 def file_payload(row):
     kind = file_kind(row["ext"])
-    thumbs = []
-    if kind in ("pdf", "image"):
-        thumbs = [url_for("file_thumb", file_id=row["id"], page=i)
-                  for i in range(1, min(row["page_count"] or 1, MAX_THUMBS) + 1)]
     return {
         "id": row["id"],
         "name": row["original_name"],
@@ -709,23 +703,9 @@ def file_payload(row):
         "zip_entries": row["zip_entries"],
         "zip_names": (row["zip_preview"] or "").split("\n") if row["zip_preview"] else [],
         "sha_short": row["sha256"][:12].upper(),
-        "thumbs": thumbs,
         "preview_url": url_for("file_preview", file_id=row["id"]) if kind != "zip" else None,
         "download_url": url_for("file_download", file_id=row["id"]),
     }
-
-
-def build_thumbs(src, file_id, page_count):
-    """Tao thumbnail (toi da MAX_THUMBS trang) tu tep cuc bo `src` vao THUMB_DIR."""
-    doc = pymupdf.open(str(src))
-    try:
-        for p in range(1, min(page_count or 1, MAX_THUMBS) + 1):
-            pg = doc[p - 1]
-            zoom = min(2.0, 420 / max(pg.rect.width, 1))
-            pix = pg.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
-            pix.save(str(THUMB_DIR / f"{file_id}_{p}.png"))
-    finally:
-        doc.close()
 
 
 def _safe_drive_delete(drive_id):
@@ -788,13 +768,6 @@ def api_upload():
         )
         db.commit()
         file_id = cur.lastrowid
-
-        # Tao thumbnail ngay khi tep con o may (khong bat buoc thanh cong)
-        if file_kind(ext) != "zip":
-            try:
-                build_thumbs(path, file_id, meta["page_count"])
-            except Exception:
-                app.logger.exception("Khong tao duoc thumbnail luc upload")
     except UploadError as e:
         if drive_id:
             _safe_drive_delete(drive_id)
@@ -899,37 +872,6 @@ def file_preview(file_id):
 @login_required
 def file_download(file_id):
     return serve_file(get_file_for_user(file_id), as_attachment=True)
-
-
-@app.route("/files/<int:file_id>/thumb/<int:page>")
-@login_required
-def file_thumb(file_id, page):
-    row = get_file_for_user(file_id)
-    kind = file_kind(row["ext"])
-    if kind == "zip" or page < 1 or page > min(row["page_count"] or 1, MAX_THUMBS):
-        abort(404)
-    cache = THUMB_DIR / f"{row['id']}_{page}.png"
-    if not cache.exists():
-        # Cache bi mat: tai tep tu Drive ve 1 lan, tao lai toan bo thumbnail roi xoa ban tam
-        tmp = None
-        try:
-            if row["drive_file_id"]:
-                tmp = STAGING_DIR / f"dl_{uuid.uuid4().hex}{row['ext']}"
-                drive_storage.download_to(row["drive_file_id"], tmp)
-                src = tmp
-            else:
-                src = UPLOAD_DIR / row["stored_name"]
-            build_thumbs(src, row["id"], row["page_count"])
-        except Exception:
-            app.logger.exception("Khong tao duoc thumbnail")
-        finally:
-            if tmp:
-                tmp.unlink(missing_ok=True)
-        if not cache.exists():
-            abort(404)
-    resp = send_file(cache, mimetype="image/png", max_age=3600)
-    resp.headers["Cache-Control"] = "private, max-age=3600"
-    return resp
 
 
 # ---- Luu de thi -------------------------------------------------------------

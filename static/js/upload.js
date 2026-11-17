@@ -199,15 +199,15 @@
     updateDockHint();
   }
 
-  function renderPreview(f) {
-    var grid = $("thumbGrid");
+    function renderPreview(f) {
+    var box = $("previewBox");
     var zipList = $("zipList");
-    grid.textContent = "";
+    box.textContent = "";
     zipList.textContent = "";
 
     if (f.kind === "zip") {
       $("previewTitle").textContent = "NỘI DUNG GÓI ZIP (" + f.zip_entries + " TỆP)";
-      grid.hidden = true;
+      box.hidden = true;
       zipList.hidden = false;
       f.zip_names.forEach(function (n) {
         var li = el("li");
@@ -221,29 +221,24 @@
       return;
     }
 
-    grid.hidden = false;
+    box.hidden = false;
     zipList.hidden = true;
-    grid.classList.toggle("thumb-grid--single", f.kind === "image");
-    var shown = f.thumbs.length;
-    $("previewTitle").textContent = f.kind === "pdf"
-      ? "XEM TRƯỚC CÁC TRANG ĐỀ THI (" + shown + (f.pages > shown ? "/" + f.pages : "") + " TRANG)"
-      : "XEM TRƯỚC ẢNH ĐỀ THI";
 
-    f.thumbs.forEach(function (src, i) {
-      var a = el("a", "thumb");
-      a.href = f.preview_url + (f.kind === "pdf" ? "#page=" + (i + 1) : "");
-      a.target = "_blank";
-      a.rel = "noopener";
-      var box = el("div", "thumb__img");
+    if (f.kind === "pdf") {
+      $("previewTitle").textContent = "XEM TRƯỚC ĐỀ THI (" + pad2(f.pages) + " TRANG)";
+      var frame = document.createElement("iframe");
+      frame.className = "preview-frame";
+      frame.src = f.preview_url + "#toolbar=0&navpanes=0";
+      frame.title = "Xem trước " + f.name;
+      box.appendChild(frame);
+    } else {
+      $("previewTitle").textContent = "XEM TRƯỚC ẢNH ĐỀ THI";
       var img = document.createElement("img");
-      img.src = src;
-      img.alt = "Trang " + (i + 1);
-      img.loading = "lazy";
+      img.className = "preview-img";
+      img.src = f.preview_url;
+      img.alt = f.name;
       box.appendChild(img);
-      a.appendChild(box);
-      a.appendChild(el("span", null, f.kind === "pdf" ? "TRANG " + pad2(i + 1) : "ẢNH GỐC"));
-      grid.appendChild(a);
-    });
+    }
   }
 
   function resetFileUI() {

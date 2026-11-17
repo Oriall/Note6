@@ -1,1 +1,3 @@
 /uploads
+.env
+client_secret.json
